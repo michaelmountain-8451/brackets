@@ -1,0 +1,5 @@
+# Required files
+1. teams.txt - should be a 64 line text file with the name of a single team on each line. Ordered by their appearance in the round of 64 (top to bottom, left to right)
+2. results.txt - should be a 0-63 line text file. Each line containing the name of a team that won the corresponding tournament game (all first round games first in the same order as the teams.txt file, then all the second round games, etc. with the title game winner on line 63). Leave blank lines to indicate games not yet played.
+3. bracket.txt - should be a 63-line text file. Each line containing the name of the team predicted to win the corresponding tournament game (matching the order of games in reuslts.txt). If this file has a different name, you can provide an override as the first argument when executing the runner class.
+4. other_brackets/ folder - should contain one or more txt files with the same format as bracket.txt, representing the other entries in the bracket pool that will be compared against. 
