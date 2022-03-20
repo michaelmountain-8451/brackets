@@ -25,7 +25,7 @@ public class BracketRunner {
 		Bracket myBracket = readMyBracket(args);
 		System.out.println("Current score: " + tourney.scoreBracket(myBracket));
 		List<Bracket> otherBrackets = readOtherBrackets();
-		otherBrackets.sort(Comparator.comparingInt(tourney::scoreBracket));
+		otherBrackets.sort(Comparator.comparingInt(tourney::scoreBracket).reversed());
 		
 		long max = 0L;
 		long min = 0L;
