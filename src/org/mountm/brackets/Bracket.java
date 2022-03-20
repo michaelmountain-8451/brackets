@@ -8,17 +8,6 @@ public class Bracket {
 		picks = 0L;
 	}
 	
-	public boolean getPick(int position) {
-		long mask = 1L << position;
-		return (picks & mask) != 0;
-	}
-	
-	public void setPick(boolean pick, int position) {
-		if (pick) {
-			picks |= 1L << position;
-		}
-	}
-	
 	public long getPicks() {
 		return picks;
 	}
@@ -44,9 +33,7 @@ public class Bracket {
 		if (getClass() != obj.getClass())
 			return false;
 		Bracket other = (Bracket) obj;
-		if (picks != other.picks)
-			return false;
-		return true;
+		return picks == other.picks;
 	}
 
 }

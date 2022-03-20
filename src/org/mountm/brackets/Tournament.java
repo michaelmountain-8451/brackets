@@ -5,10 +5,16 @@ public class Tournament {
 	public static final int NUM_ROUNDS = 6;
 	public static final int NUM_TEAMS = (int) Math.pow(2, NUM_ROUNDS);
 	
-	private static int[] gamesPerRound = new int[NUM_ROUNDS];
-	private static int[] pointsPerGame = new int[NUM_ROUNDS];
-	private static long[][]teamRoundMasks = new long[NUM_TEAMS][NUM_ROUNDS];
-	private static long[][]teamRoundValues = new long[NUM_TEAMS][NUM_ROUNDS];
+	private static final int[] gamesPerRound = new int[NUM_ROUNDS];
+	// points per game in each round, loaded from points.txt
+	private static int[] gamePointsPerRound = new int[NUM_ROUNDS];
+	// for each team and round, a bitmask of width (NUM_TEAMS - 1)
+	// with bits set for every game that team would play in from rounds 0-<ROUND> inclusive
+	private static final long[][]teamRoundMasks = new long[NUM_TEAMS][NUM_ROUNDS];
+	// for each team and round, a value of width (NUM_TEAMS - 1)
+	// with bits set matching the required results to advance that team through round [ROUND]
+	// (see details of the "results" value below)
+	private static final long[][]teamRoundValues = new long[NUM_TEAMS][NUM_ROUNDS];
 	
 	public static long[][] getMasks() {
 		return teamRoundMasks;
@@ -32,7 +38,8 @@ public class Tournament {
 	 */
 	private long gamesMask;
 	
-	public Tournament() {
+	public Tournament(int[] gamePointsPerRound) {
+		Tournament.gamePointsPerRound = gamePointsPerRound;
 		results = 0L;
 		gamesMask = 0L;
 		generateScoringData();
@@ -41,13 +48,6 @@ public class Tournament {
 	public void setResults(long results, long gamesMask) {
 		this.results = results;
 		this.gamesMask = gamesMask;
-	}
-	
-	public void setResult(boolean result, int position) {
-		if (result) {
-			results |= 1L << position;
-		}
-		gamesMask |= 1L << position;
 	}
 	
 	public long getResults() {
@@ -68,9 +68,10 @@ public class Tournament {
 					if ((picks & teamRoundMasks[team][round]) == teamRoundValues[team][round]) {
 						// If you picked a team to win in a given round, you must have picked them in prev rounds also
 						for (int i = 0; i <= round; i++) {
-							score += pointsPerGame[i];
+							score += gamePointsPerRound[i];
 						}
-						// no need to check other masks and values for that team
+						// no need to check other rounds for this team
+						// since we are checking backwards from the last round
 						break;
 					}
 				}
@@ -89,9 +90,10 @@ public class Tournament {
 					if ((picks & teamRoundMasks[team][round]) == teamRoundValues[team][round]) {
 						// If you picked a team to win in a given round, you must have picked them in prev rounds also
 						for (int i = 0; i <= round; i++) {
-							score += pointsPerGame[i];
+							score += gamePointsPerRound[i];
 						}
-						// no need to check other masks and values for that team
+						// no need to check other rounds for this team
+						// since we are checking backwards from the last round
 						break;
 					}
 				}
@@ -104,7 +106,6 @@ public class Tournament {
 	private void generateScoringData() {
 		for (int round = 0; round < NUM_ROUNDS; round++) {
 			gamesPerRound[round] = (int) Math.pow(2, (NUM_ROUNDS - 1) - round);
-			pointsPerGame[round] = (int) Math.pow(2, round);
 		}
 		for (int team = 0; team < NUM_TEAMS; team++) {
 			for (int round = 0; round < NUM_ROUNDS; round++) {

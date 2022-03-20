@@ -5,15 +5,12 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.text.DecimalFormat;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 public class BracketRunner {
 	
-	private static List<String> teams = new ArrayList<>();
-	private static DecimalFormat df = new DecimalFormat("#.##");
+	private static final List<String> teams = new ArrayList<>();
+	private static final DecimalFormat df = new DecimalFormat("#.###");
 
 	public static void main(String[] args) {
 		
@@ -25,9 +22,10 @@ public class BracketRunner {
 		long realMask = tourney.getGamesMask();
 		long realResults = tourney.getResults();
 		int shift = Long.numberOfTrailingZeros(~realMask);
-		Bracket myBracket = readMyBracket();
+		Bracket myBracket = readMyBracket(args);
 		System.out.println("Current score: " + tourney.scoreBracket(myBracket));
-		Set<Bracket> otherBrackets = readOtherBrackets();
+		List<Bracket> otherBrackets = readOtherBrackets();
+		otherBrackets.sort(Comparator.comparingInt(tourney::scoreBracket));
 		
 		long max = 0L;
 		long min = 0L;
@@ -52,10 +50,10 @@ public class BracketRunner {
 		
 		long count = 0L;
 		long winCount = 0L;
-		long results = 0L;
-		long shiftedFakeResults = 0L;
+		long results;
+		long shiftedFakeResults;
 		for (long fakeResults = min; fakeResults <= max; fakeResults++) {
-			if (fakeResults % 500000000 == 0) {
+			if (fakeResults % 100000000 == 0) {
 				System.out.println(df.format((double) fakeResults / max) + " checked in " + (System.currentTimeMillis() - startTime) / 1000 + " seconds");
 			}
 			shiftedFakeResults = fakeResults << shift;
@@ -73,22 +71,24 @@ public class BracketRunner {
 				}
 				count++;
 				tourney.setResults(results, max);
-				if (tourney.scoreFinishedBracket(myBracket) > otherBrackets.stream().mapToInt(tourney::scoreFinishedBracket).max().orElse(0)) {
-					// add to wins for any matching team advancement scenarios
-					for (int i = 0; i < Tournament.NUM_TEAMS; i++) {
-						for (int j = 0; j < Tournament.NUM_ROUNDS; j++) {
-							if ((results & Tournament.getMasks()[i][j]) == Tournament.getValues()[i][j]) {
-								wins[i][j]++;
-							}
+				int myScore = tourney.scoreFinishedBracket(myBracket);
+				if (otherBrackets.stream().anyMatch(b -> tourney.scoreFinishedBracket(b) >= myScore)) {
+					continue;
+				}
+				// add to wins for any matching team advancement scenarios
+				for (int i = 0; i < Tournament.NUM_TEAMS; i++) {
+					for (int j = 0; j < Tournament.NUM_ROUNDS; j++) {
+						if ((results & Tournament.getMasks()[i][j]) == Tournament.getValues()[i][j]) {
+							wins[i][j]++;
 						}
 					}
-					winCount++;
 				}
+				winCount++;
 			}
 		}
-		System.out.println("You win " + winCount + " out of " + count + " different scenarios: " + df.format((double) winCount / count));
+		double winRate = (double) winCount / count;
+		System.out.println("You win " + winCount + " out of " + count + " different scenarios: " + df.format(winRate));
 		if (winCount > 0) {
-			double winRate = (double) winCount / count;
 			// print out any team advancement scenarios that result in improved overall odds
 			// TODO figure out a way to sort these and display the most important first
 			for (int i = 0; i < Tournament.NUM_TEAMS; i++) {
@@ -111,9 +111,19 @@ public class BracketRunner {
 
 	private static Tournament readResults() {
 		List<String> winners = new ArrayList<>();
-		Tournament tourney = new Tournament();
-		String currentLine;
+		int[] gamePointsPerRound = new int[Tournament.NUM_ROUNDS];
+		try (BufferedReader br = new BufferedReader(new FileReader("points.txt"))) {
+			String currentLine;
+			int line = 0;
+			while ((currentLine = br.readLine()) != null) {
+				gamePointsPerRound[line++] = Integer.parseInt(currentLine, 10);
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		Tournament tourney = new Tournament(gamePointsPerRound);
 		try (BufferedReader br = new BufferedReader(new FileReader("results.txt"))) {
+			String currentLine;
 			while ((currentLine = br.readLine()) != null) {
 				winners.add(currentLine);
 			}
@@ -159,28 +169,39 @@ public class BracketRunner {
 		return result;
 	}
 
-	private static Set<Bracket> readOtherBrackets() {
-		Set<Bracket> brackets = new HashSet<>();
+	private static List<Bracket> readOtherBrackets() {
+		List<Bracket> brackets = new ArrayList<>();
 		File f = new File("other_brackets");
 		if (f.exists()) {
 			File[] files = f.listFiles();
-			for (int i = 0; i < files.length; i++) {
-				try (BufferedReader br = new BufferedReader(new FileReader(files[i]))) {
+			assert files != null;
+			for (File file : files) {
+				try (BufferedReader br = new BufferedReader(new FileReader(file))) {
 					brackets.add(readBracket(br));
 				} catch (IOException e) {
 					e.printStackTrace();
+				} catch (RuntimeException e) {
+					System.out.println("Error reading " + file.getName());
+					throw e;
 				}
 			}
 		}
 		return brackets;
 	}
 
-	private static Bracket readMyBracket() {
+	private static Bracket readMyBracket(String[] args) {
 		Bracket bracket = new Bracket();
-		try (BufferedReader br = new BufferedReader(new FileReader("bracket.txt"))) {
+		String fileName = "bracket.txt";
+		if (args.length > 0) {
+			fileName = args[0];
+		}
+		try (BufferedReader br = new BufferedReader(new FileReader(fileName))) {
 			bracket = readBracket(br);
 		} catch (IOException e) {
 			e.printStackTrace();
+		} catch (RuntimeException e) {
+			System.out.println("Error reading " + fileName);
+			throw e;
 		}
 		return bracket;
 	}
