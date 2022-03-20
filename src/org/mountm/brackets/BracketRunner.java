@@ -72,7 +72,7 @@ public class BracketRunner {
 				count++;
 				tourney.setResults(results, max);
 				int myScore = tourney.scoreFinishedBracket(myBracket);
-				if (otherBrackets.stream().anyMatch(b -> tourney.scoreFinishedBracket(b) >= myScore)) {
+				if (otherBrackets.stream().anyMatch(b -> tourney.scoreFinishedBracket(b) > myScore)) {
 					continue;
 				}
 				// add to wins for any matching team advancement scenarios
