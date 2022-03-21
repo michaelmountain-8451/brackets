@@ -190,7 +190,7 @@ public class BracketRunner {
 	}
 
 	private static Bracket readMyBracket(String[] args) {
-		Bracket bracket = new Bracket();
+		Bracket bracket;
 		String fileName = "bracket.txt";
 		if (args.length > 0) {
 			fileName = args[0];
@@ -198,7 +198,7 @@ public class BracketRunner {
 		try (BufferedReader br = new BufferedReader(new FileReader(fileName))) {
 			bracket = readBracket(br);
 		} catch (IOException e) {
-			e.printStackTrace();
+			throw new RuntimeException(e);
 		} catch (RuntimeException e) {
 			System.out.println("Error reading " + fileName);
 			throw e;
