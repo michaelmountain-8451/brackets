@@ -10,18 +10,31 @@ public class Tournament {
 	private static int[] gamePointsPerRound = new int[NUM_ROUNDS];
 	// for each team and round, a bitmask of width (NUM_TEAMS - 1)
 	// with bits set for every game that team would play in from rounds 0-<ROUND> inclusive
-	private static final long[][]teamRoundMasks = new long[NUM_TEAMS][NUM_ROUNDS];
+	private static final long[][] teamRoundMasks = new long[NUM_TEAMS][NUM_ROUNDS];
 	// for each team and round, a value of width (NUM_TEAMS - 1)
 	// with bits set matching the required results to advance that team through round [ROUND]
 	// (see details of the "results" value below)
-	private static final long[][]teamRoundValues = new long[NUM_TEAMS][NUM_ROUNDS];
+	private static final long[][] teamRoundValues = new long[NUM_TEAMS][NUM_ROUNDS];
+	// for each pair of teams, a value of width (NUM_TEAMS - 1)
+	// with bits set for every game those teams would play in to face each other
+	// (including the head to head game)
+	private static final long[][] headToHeadMasks = new long[NUM_TEAMS][NUM_TEAMS];
+	// for each pair of teams, a value of width (NUM_TEAMS - 1)
+	// with bits set matching the required results to advance the first team past the second team
+	// in a head to head matchup
+	private static final long[][] headToHeadValues = new long[NUM_TEAMS][NUM_TEAMS];
 	
 	public static long[][] getMasks() {
 		return teamRoundMasks;
 	}
-	
 	public static long[][] getValues() {
 		return teamRoundValues;
+	}
+	public static long[][] getH2HMasks() {
+		return headToHeadMasks;
+	}
+	public static long[][] getH2HValues() {
+		return headToHeadValues;
 	}
 	
 	/*
@@ -113,6 +126,29 @@ public class Tournament {
 				teamRoundValues[team][round] = generateValue(team, round);
 			}
 		}
+		for (int team1 = 0; team1 < NUM_TEAMS; team1++) {
+			for (int team2 = team1 + 1; team2 < NUM_TEAMS; team2++) {
+				// figure out what round these teams could meet in
+				// only one possibility
+				for (int round = NUM_ROUNDS - 1; round >= 0; round--) {
+					if (Long.bitCount(teamRoundMasks[team1][round] & teamRoundMasks[team2][round]) == 1) {
+						headToHeadMasks[team1][team2] = teamRoundMasks[team1][round] | teamRoundMasks[team2][round];
+						headToHeadMasks[team2][team1] = headToHeadMasks[team1][team2];
+						headToHeadValues[team1][team2] = generateH2HValue(team1, team2, round);
+						headToHeadValues[team2][team1] = generateH2HValue(team2, team1, round);
+						break;
+					}
+				}
+			}
+		}
+	}
+
+	private long generateH2HValue(int winningTeam, int losingTeam, int round) {
+		long winningTeamValue = teamRoundValues[winningTeam][round];
+		long winningTeamMask = teamRoundMasks[winningTeam][round];
+		long losingTeamValue = teamRoundValues[losingTeam][round];
+		// https://graphics.stanford.edu/~seander/bithacks.html#MaskedMerge
+		return losingTeamValue ^ ((losingTeamValue ^ winningTeamValue) & winningTeamMask);
 	}
 
 	private long generateMask(int teamPos, int round) {

@@ -1,16 +1,16 @@
 package org.mountm.brackets;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
-import java.io.IOException;
+import java.io.*;
 import java.text.DecimalFormat;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class BracketRunner {
 	
 	private static final List<String> teams = new ArrayList<>();
 	private static final DecimalFormat df = new DecimalFormat("#.###");
+	private static final Set<String> stillAliveTeams = new HashSet<>();
+	private static Set<Integer> stillAliveTeamIndices = new HashSet<>();
 
 	public static void main(String[] args) {
 		
@@ -26,6 +26,11 @@ public class BracketRunner {
 		System.out.println("Current score: " + tourney.scoreBracket(myBracket));
 		List<Bracket> otherBrackets = readOtherBrackets();
 		otherBrackets.sort(Comparator.comparingInt(tourney::scoreBracket).reversed());
+
+		Map<String, Double> teamRatings = readTeamRatings();
+		stillAliveTeams.addAll(teamRatings.keySet());
+		stillAliveTeamIndices = stillAliveTeams.stream().map(teams::indexOf).collect(Collectors.toSet());
+		double[][] probabilities = generateProbabilities(teamRatings);
 		
 		long max = 0L;
 		long min = 0L;
@@ -47,11 +52,12 @@ public class BracketRunner {
 		
 		
 		long startTime = System.currentTimeMillis();
-		
+
 		long count = 0L;
 		long winCount = 0L;
 		long results;
 		long shiftedFakeResults;
+		double winProb = 0;
 		for (long fakeResults = min; fakeResults <= max; fakeResults++) {
 			if (fakeResults % 100000000 == 0) {
 				System.out.println(df.format((double) fakeResults / max) + " checked in " + (System.currentTimeMillis() - startTime) / 1000 + " seconds");
@@ -75,6 +81,16 @@ public class BracketRunner {
 				if (otherBrackets.stream().anyMatch(b -> tourney.scoreFinishedBracket(b) > myScore)) {
 					continue;
 				}
+				// figure out the probability of this outcome happening
+				double scenarioProb = 1.0;
+				for (int i : stillAliveTeamIndices) {
+					for (int j : stillAliveTeamIndices) {
+						if (i != j && (results & Tournament.getH2HMasks()[i][j]) == Tournament.getH2HValues()[i][j]) {
+							scenarioProb *= probabilities[i][j];
+						}
+					}
+				}
+				winProb += scenarioProb;
 				// add to wins for any matching team advancement scenarios
 				for (int i = 0; i < Tournament.NUM_TEAMS; i++) {
 					for (int j = 0; j < Tournament.NUM_ROUNDS; j++) {
@@ -88,6 +104,7 @@ public class BracketRunner {
 		}
 		double winRate = (double) winCount / count;
 		System.out.println("You win " + winCount + " out of " + count + " different scenarios: " + df.format(winRate));
+		System.out.println("Your chances of winning are " + df.format(winProb));
 		if (winCount > 0) {
 			// print out any team advancement scenarios that result in improved overall odds
 			// TODO figure out a way to sort these and display the most important first
@@ -107,6 +124,37 @@ public class BracketRunner {
 		
 		System.out.println("Execution time: " + (endTime - startTime) / 1000 + " seconds");
 
+	}
+
+	private static double[][] generateProbabilities(Map<String, Double> teamRatings) {
+		double[][] probabilities = new double[Tournament.NUM_TEAMS][Tournament.NUM_TEAMS];
+		for (String team1 : stillAliveTeams) {
+			for (String team2 : stillAliveTeams) {
+				if (!team1.equals(team2)) {
+					probabilities[teams.indexOf(team1)][teams.indexOf(team2)] = winProb(teamRatings.get(team1), teamRatings.get(team2));
+				}
+			}
+		}
+		return probabilities;
+	}
+
+	private static double winProb(Double v1, Double v2) {
+		// https://fivethirtyeight.com/features/how-our-march-madness-predictions-work-2/
+		return 1.0 / (1.0 + Math.pow(10, (v2 - v1) * 0.07616));
+	}
+
+	private static Map<String, Double> readTeamRatings() {
+		Map<String, Double> retVal = new HashMap<>();
+		try (BufferedReader br = new BufferedReader(new FileReader("ratings.csv"))) {
+			String currentLine;
+			while ((currentLine = br.readLine()) != null) {
+				String[] data = currentLine.split(",");
+				retVal.put(data[0], Double.parseDouble(data[1]));
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		return retVal;
 	}
 
 	private static Tournament readResults() {
