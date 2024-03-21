@@ -10,7 +10,7 @@ public class BracketRunner {
 	private static final List<String> teams = new ArrayList<>();
 	private static final DecimalFormat df = new DecimalFormat("#.###");
 	private static final Set<String> stillAliveTeams = new HashSet<>();
-	private static Set<Integer> stillAliveTeamIndices = new HashSet<>();
+	private static String myBracketFileName = "bracket.txt";
 
 	public static void main(String[] args) {
 		
@@ -21,6 +21,7 @@ public class BracketRunner {
 		Tournament tourney = readResults();
 		long realMask = tourney.getGamesMask();
 		long realResults = tourney.getResults();
+		// restrict the search space by leaving off one bit for each game at the beginning of the bracket that is already completed
 		int shift = Long.numberOfTrailingZeros(~realMask);
 		Bracket myBracket = readMyBracket(args);
 		System.out.println("Current score: " + tourney.scoreBracket(myBracket));
@@ -29,12 +30,11 @@ public class BracketRunner {
 
 		Map<String, Double> teamRatings = readTeamRatings();
 		stillAliveTeams.addAll(teamRatings.keySet());
-		stillAliveTeamIndices = stillAliveTeams.stream().map(teams::indexOf).collect(Collectors.toSet());
+		Set<Integer> stillAliveTeamIndices = stillAliveTeams.stream().map(teams::indexOf).collect(Collectors.toSet());
 		double[][] probabilities = generateProbabilities(teamRatings);
 		
 		long max = 0L;
 		long min = 0L;
-		// restrict the search space by leaving off one bit for each game at the beginning of the bracket that is already completed
 		for (int i = 0; i < Tournament.NUM_TEAMS - 1 - shift; i++) {
 			max = (max << 1) + 1;
 		}
@@ -49,8 +49,7 @@ public class BracketRunner {
 			max = Long.MAX_VALUE;
 			min = Long.MIN_VALUE;
 		}
-		
-		
+
 		long startTime = System.currentTimeMillis();
 
 		long count = 0L;
@@ -59,7 +58,7 @@ public class BracketRunner {
 		long shiftedFakeResults;
 		double winProb = 0;
 		for (long fakeResults = min; fakeResults <= max; fakeResults++) {
-			if (fakeResults % 100000000 == 0) {
+			if (fakeResults % 10000000 == 0) {
 				System.out.println(df.format((double) fakeResults / max) + " checked in " + (System.currentTimeMillis() - startTime) / 1000 + " seconds");
 			}
 			shiftedFakeResults = fakeResults << shift;
@@ -91,6 +90,7 @@ public class BracketRunner {
 					}
 				}
 				winProb += scenarioProb;
+				
 				// add to wins for any matching team advancement scenarios
 				for (int i = 0; i < Tournament.NUM_TEAMS; i++) {
 					for (int j = 0; j < Tournament.NUM_ROUNDS; j++) {
@@ -197,13 +197,13 @@ public class BracketRunner {
 		return result;
 	}
 
-	private static long convertToResults(List<String> winners, boolean failIfNotFound) {
+	private static long convertToResults(List<String> winners, boolean shouldFailOnBlanks) {
 		long result = 0L;
 		Set<String> winningTeams = new HashSet<>(winners);
 		for (String team: winningTeams) {
 			int teamIdx = teams.indexOf(team);
 			if (teamIdx == -1) {
-				if (failIfNotFound || !"".equals(team)) {
+				if (shouldFailOnBlanks || !"".equals(team)) {
 					throw new RuntimeException("Couldn't find team " + team);
 				} else continue;
 			}
@@ -213,17 +213,16 @@ public class BracketRunner {
 			// https://graphics.stanford.edu/~seander/bithacks.html#MaskedMerge
 			result = result ^ ((result ^ teamVal) & teamMask);
 		}
-		System.out.println(Long.toBinaryString(result));
 		return result;
 	}
 
 	private static List<Bracket> readOtherBrackets() {
 		List<Bracket> brackets = new ArrayList<>();
-		File f = new File("other_brackets");
-		if (f.exists()) {
-			File[] files = f.listFiles();
-			assert files != null;
-			for (File file : files) {
+		File myBracket = new File(myBracketFileName);
+		if (myBracket.exists() && myBracket.getParentFile() != null) {
+			File[] otherBracketFiles = myBracket.getParentFile().listFiles((dir, name) -> !myBracketFileName.endsWith(name));
+			assert otherBracketFiles != null;
+			for (File file : otherBracketFiles) {
 				try (BufferedReader br = new BufferedReader(new FileReader(file))) {
 					brackets.add(readBracket(br));
 				} catch (IOException e) {
@@ -239,16 +238,13 @@ public class BracketRunner {
 
 	private static Bracket readMyBracket(String[] args) {
 		Bracket bracket;
-		String fileName = "bracket.txt";
-		if (args.length > 0) {
-			fileName = args[0];
-		}
-		try (BufferedReader br = new BufferedReader(new FileReader(fileName))) {
+		myBracketFileName = args[0];
+		try (BufferedReader br = new BufferedReader(new FileReader(myBracketFileName))) {
 			bracket = readBracket(br);
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		} catch (RuntimeException e) {
-			System.out.println("Error reading " + fileName);
+			System.out.println("Error reading " + myBracketFileName);
 			throw e;
 		}
 		return bracket;
